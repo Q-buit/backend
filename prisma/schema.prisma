@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Track {
+  frontend
+  backend
+}
+
+enum QuestionType {
+  concept
+  experience
+}
+
+enum AnswerFramework {
+  PREP
+  STAR
+}
+
+enum SubscriptionStatus {
+  pending
+  active
+  dormant
+  unsubscribed
+  bounced
+}
+
+model Subscriber {
+  id                 Int               @id @default(autoincrement())
+  email              String            @unique
+  consentToMarketing Boolean
+  status             SubscriptionStatus
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  tracks             SubscriberTrack[]
+  deliveries         Delivery[]
+  tokens             Token[]
+}
+
+model SubscriberTrack {
+  id              Int                @id @default(autoincrement())
+  subscriberId    Int
+  track           Track
+  categories      String[]
+  status          SubscriptionStatus
+  currentSequence Int                @default(1)
+  lastClickedAt   DateTime?
+  subscriber      Subscriber         @relation(fields: [subscriberId], references: [id])
+
+  @@unique([subscriberId, track])
+}
+
+model Question {
+  id                   Int              @id @default(autoincrement())
+  slug                 String           @unique
+  track                Track
+  category             String
+  questionType         QuestionType
+  recommendedFramework AnswerFramework
+  title                String
+  question             String
+  conceptSummary       String
+  modelAnswer          String
+  followUps            String[]
+  sequenceNo           Int
+  isActive             Boolean          @default(true)
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  deliveries           Delivery[]
+}
+
+model Delivery {
+  id           Int      @id @default(autoincrement())
+  subscriberId Int
+  questionId   Int
+  sentAt       DateTime @default(now())
+  clickedAt    DateTime?
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
+  question     Question @relation(fields: [questionId], references: [id])
+}
+
+model Token {
+  id           Int      @id @default(autoincrement())
+  subscriberId Int
+  type         String
+  tokenHash    String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
+}
