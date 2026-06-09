@@ -1,14 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { SubscriptionRepository } from "../repositories/subscription-repository.js";
+import { SubscriptionService } from "../services/subscription-service.js";
 
 const createSubscriptionSchema = z.object({
   email: z.string().email(),
   tracks: z.array(z.enum(["frontend", "backend"])).min(1),
-  categories: z.array(z.string()).min(1),
-  consentToMarketing: z.boolean(),
+  consentToReceive: z.boolean(),
 });
 
 export async function registerSubscriptionRoutes(app: FastifyInstance) {
+  const subscriptionService = new SubscriptionService(new SubscriptionRepository());
+
   app.post("/subscriptions", async (request, reply) => {
     const payload = createSubscriptionSchema.safeParse(request.body);
 
@@ -19,22 +22,86 @@ export async function registerSubscriptionRoutes(app: FastifyInstance) {
       });
     }
 
+    const result = subscriptionService.createSubscription(payload.data);
+
     return reply.code(201).send({
-      message: "구독 요청을 받았습니다. 실제 구현에서는 인증 메일을 발송해야 합니다.",
-      data: payload.data,
+      message: "구독 요청을 저장했습니다. 인증 링크를 확인해 주세요.",
+      data: result,
     });
   });
 
-  app.post("/subscriptions/unsubscribe", async () => {
+  app.get<{ Querystring: { token: string } }>("/subscriptions/verify", async (request, reply) => {
+    const tokenSchema = z.object({
+      token: z.string().min(1),
+    });
+    const payload = tokenSchema.safeParse(request.query);
+
+    if (!payload.success) {
+      return reply.code(400).send({
+        message: "인증 토큰 형식이 올바르지 않습니다.",
+      });
+    }
+
+    const result = subscriptionService.verifySubscription(payload.data.token);
+    if (!result) {
+      return reply.code(404).send({
+        message: "유효한 인증 토큰을 찾을 수 없습니다.",
+      });
+    }
+
     return {
-      message: "MVP 구현 예정: 토큰 기반 전체 구독 취소",
+      message: "이메일 인증이 완료되었습니다.",
+      data: result,
     };
   });
 
-  app.get("/subscriptions/manage/:token", async (request) => {
+  app.post<{ Body: { token: string } }>("/subscriptions/unsubscribe", async (request, reply) => {
+    const tokenSchema = z.object({
+      token: z.string().min(1),
+    });
+    const payload = tokenSchema.safeParse(request.body);
+
+    if (!payload.success) {
+      return reply.code(400).send({
+        message: "구독 취소 토큰 형식이 올바르지 않습니다.",
+      });
+    }
+
+    const result = subscriptionService.unsubscribe(payload.data.token);
+    if (!result) {
+      return reply.code(404).send({
+        message: "유효한 구독 취소 토큰을 찾을 수 없습니다.",
+      });
+    }
+
     return {
-      message: "MVP 구현 예정: 토큰 기반 구독 관리 조회",
-      token: (request.params as { token: string }).token,
+      message: "구독이 취소되었습니다.",
+      data: result,
+    };
+  });
+
+  app.get<{ Querystring: { token: string } }>("/subscriptions/manage", async (request, reply) => {
+    const tokenSchema = z.object({
+      token: z.string().min(1),
+    });
+    const payload = tokenSchema.safeParse(request.query);
+
+    if (!payload.success) {
+      return reply.code(400).send({
+        message: "관리 토큰 형식이 올바르지 않습니다.",
+      });
+    }
+
+    const result = subscriptionService.getManageData(payload.data.token);
+    if (!result) {
+      return reply.code(404).send({
+        message: "유효한 관리 토큰을 찾을 수 없습니다.",
+      });
+    }
+
+    return {
+      message: "구독 관리 정보를 조회했습니다.",
+      data: result,
     };
   });
 }

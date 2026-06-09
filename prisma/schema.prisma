@@ -27,69 +27,89 @@ enum SubscriptionStatus {
   active
   dormant
   unsubscribed
-  bounced
+}
+
+enum DeliveryStatus {
+  queued
+  sent
+  failed
+}
+
+enum TokenType {
+  verify
+  manage
+  unsubscribe
 }
 
 model Subscriber {
-  id                 Int               @id @default(autoincrement())
-  email              String            @unique
-  consentToMarketing Boolean
-  status             SubscriptionStatus
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  tracks             SubscriberTrack[]
-  deliveries         Delivery[]
-  tokens             Token[]
+  id               Int               @id @default(autoincrement())
+  email            String            @unique
+  status           SubscriptionStatus
+  consentToReceive Boolean
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  tracks           SubscriberTrack[]
+  tokens           SubscriptionToken[]
 }
 
 model SubscriberTrack {
-  id              Int                @id @default(autoincrement())
-  subscriberId    Int
-  track           Track
-  categories      String[]
-  status          SubscriptionStatus
-  currentSequence Int                @default(1)
-  lastClickedAt   DateTime?
-  subscriber      Subscriber         @relation(fields: [subscriberId], references: [id])
+  id                   Int                @id @default(autoincrement())
+  subscriberId         Int
+  track                Track
+  status               SubscriptionStatus
+  currentQuestionOrder Int                @default(1)
+  lastClickedAt        DateTime?
+  activatedAt          DateTime?
+  dormantAt            DateTime?
+  unsubscribedAt       DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  subscriber           Subscriber         @relation(fields: [subscriberId], references: [id])
+  deliveries           Delivery[]
 
   @@unique([subscriberId, track])
 }
 
 model Question {
   id                   Int              @id @default(autoincrement())
-  slug                 String           @unique
   track                Track
   category             String
   questionType         QuestionType
   recommendedFramework AnswerFramework
   title                String
-  question             String
+  questionText         String
   conceptSummary       String
   modelAnswer          String
-  followUps            String[]
-  sequenceNo           Int
-  isActive             Boolean          @default(true)
+  followUps            Json
+  questionOrder        Int
+  isPublished          Boolean          @default(true)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   deliveries           Delivery[]
+
+  @@unique([track, questionOrder])
 }
 
 model Delivery {
-  id           Int      @id @default(autoincrement())
-  subscriberId Int
-  questionId   Int
-  sentAt       DateTime @default(now())
-  clickedAt    DateTime?
-  subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
-  question     Question @relation(fields: [questionId], references: [id])
+  id                Int             @id @default(autoincrement())
+  subscriberTrackId Int
+  questionId        Int
+  status            DeliveryStatus
+  sentAt            DateTime?
+  clickedAt         DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  subscriberTrack   SubscriberTrack @relation(fields: [subscriberTrackId], references: [id])
+  question          Question        @relation(fields: [questionId], references: [id])
 }
 
-model Token {
-  id           Int      @id @default(autoincrement())
+model SubscriptionToken {
+  id           Int       @id @default(autoincrement())
   subscriberId Int
-  type         String
-  tokenHash    String   @unique
+  type         TokenType
+  tokenHash    String    @unique
   expiresAt    DateTime
-  createdAt    DateTime @default(now())
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
   subscriber   Subscriber @relation(fields: [subscriberId], references: [id])
 }
