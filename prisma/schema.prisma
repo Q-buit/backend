@@ -80,14 +80,28 @@ model Question {
   questionText         String
   conceptSummary       String
   modelAnswer          String
-  followUps            Json
   questionOrder        Int
   isPublished          Boolean          @default(true)
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   deliveries           Delivery[]
+  followUpLinks        QuestionFollowUp[] @relation("QuestionToFollowUps")
+  parentLinks          QuestionFollowUp[] @relation("FollowUpToQuestion")
 
   @@unique([track, questionOrder])
+}
+
+model QuestionFollowUp {
+  id                 Int      @id @default(autoincrement())
+  questionId         Int
+  followUpQuestionId Int
+  displayOrder       Int
+  createdAt          DateTime @default(now())
+  question           Question @relation("QuestionToFollowUps", fields: [questionId], references: [id])
+  followUpQuestion   Question @relation("FollowUpToQuestion", fields: [followUpQuestionId], references: [id])
+
+  @@unique([questionId, followUpQuestionId])
+  @@unique([questionId, displayOrder])
 }
 
 model Delivery {

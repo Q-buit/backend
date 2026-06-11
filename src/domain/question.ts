@@ -2,9 +2,21 @@ export type Track = "frontend" | "backend";
 export type QuestionType = "concept" | "experience";
 export type AnswerFramework = "PREP" | "STAR";
 
-export type FollowUp = {
-  question: string;
-  answer: string;
+export type FollowUpQuestion = {
+  id: number;
+  track: Track;
+  questionOrder: number;
+  title: string;
+  questionText: string;
+  questionType: QuestionType;
+  recommendedFramework: AnswerFramework;
+};
+
+export type QuestionFollowUpLink = {
+  id: number;
+  questionId: number;
+  followUpQuestionId: number;
+  displayOrder: number;
 };
 
 export type Question = {
@@ -17,7 +29,7 @@ export type Question = {
   questionText: string;
   conceptSummary: string;
   modelAnswer: string;
-  followUps: FollowUp[];
+  followUps: FollowUpQuestion[];
   questionOrder: number;
   isPublished: boolean;
 };

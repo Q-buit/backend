@@ -56,7 +56,6 @@
 - `question_text`
 - `concept_summary`
 - `model_answer`
-- `follow_ups`
 - `question_order`
 - `is_published`
 - `created_at`
@@ -69,7 +68,22 @@
 - `(track, question_order)`는 unique로 묶는다.
 - `display_order`는 따로 두지 않는다.
 
-### 2.4 `deliveries` — 발송 이력
+### 2.4 `question_follow_ups` — 질문 꼬리질문 연결
+
+- `id`
+- `question_id`
+- `follow_up_question_id`
+- `display_order`
+- `created_at`
+
+메모:
+- 꼬리질문도 독립 질문으로 관리한다.
+- `question_id != follow_up_question_id`를 보장해야 한다.
+- `(question_id, follow_up_question_id)`는 unique로 묶는다.
+- `(question_id, display_order)`는 unique로 묶는다.
+- MVP에서는 UI 기준으로 깊이 1만 사용한다.
+
+### 2.5 `deliveries` — 발송 이력
 
 - `id`
 - `subscriber_track_id`
@@ -85,7 +99,7 @@
 - 어떤 질문을
 - 언제 보냈는지 기록한다.
 
-### 2.5 `subscription_tokens` — 구독 토큰
+### 2.6 `subscription_tokens` — 구독 토큰
 
 - `id`
 - `subscriber_id`
@@ -136,31 +150,24 @@
 - `manage`
 - `unsubscribe`
 
-## 4. follow_ups 저장 방식
+## 4. 꼬리질문 저장 방식
 
-꼬리 질문은 별도 테이블로 분리하지 않는다.
+꼬리질문은 JSON 배열이 아니라 질문 간 연결로 관리한다.
 
 이유:
-- 질문의 하위 데이터다.
-- 독립 검색/통계 대상이 아니다.
-- MVP에서는 1~2개 수준이면 충분하다.
+- 꼬리질문도 독립 질문처럼 상세 페이지가 필요하다.
+- PREP/STAR, 개념 설명, 모범 답변을 재사용할 수 있어야 한다.
+- 나중에 꼬리질문 자체를 다시 일반 질문처럼 다룰 수 있어야 한다.
 
-저장 방식은 JSON 배열이다.
+즉:
+- 질문 원본은 모두 `questions`
+- 연결 정보는 `question_follow_ups`
 
-예시:
+예:
+- 질문 1 -> 질문 2
+- 질문 3 -> 질문 4
 
-```json
-[
-  {
-    "question": "가상 DOM이 필요한 이유는?",
-    "answer": "변경 범위를 효율적으로 비교하기 위해서입니다."
-  },
-  {
-    "question": "key prop은 왜 중요한가요?",
-    "answer": "리스트 요소 식별을 안정적으로 하기 위해서입니다."
-  }
-]
-```
+MVP에서는 무한 순환 구조를 피하기 위해 깊이 1만 사용한다.
 
 ## 5. 질문 번호와 URL 규칙
 
@@ -222,7 +229,8 @@
 - `SubscriberTrack.currentSequence` -> `current_question_order`로 정리 필요
 - `Question.slug`는 현재 필수 아님
 - `Question.question` -> `question_text`
-- `Question.followUps`는 `string[]`가 아니라 JSON 구조 필요
+- `Question.followUps` Json 제거
+- `QuestionFollowUp` 테이블 추가
 - `Question.sequenceNo` -> `question_order`
 - `Question.isActive` -> `is_published`
 - `Delivery.subscriberId`는 `subscriber_track_id` 기준으로 바뀌어야 함
@@ -240,6 +248,7 @@
 - 질문 상세 1개 조회
 - mock 데이터 구조 정리
 - `title`, `question`, `conceptSummary`, `modelAnswer`, `followUps` 필드 확정
+- `followUps`는 질문 요약 링크 목록으로 응답
 
 ### 9.2 구독 API 실제화
 

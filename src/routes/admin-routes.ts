@@ -12,14 +12,7 @@ const adminQuestionSchema = z.object({
   questionText: z.string().min(1),
   conceptSummary: z.string().min(1),
   modelAnswer: z.string().min(1),
-  followUps: z
-    .array(
-      z.object({
-        question: z.string().min(1),
-        answer: z.string().min(1),
-      }),
-    )
-    .default([]),
+  followUpQuestionIds: z.array(z.number().int().positive()).default([]),
 });
 
 export async function registerAdminRoutes(app: FastifyInstance) {
@@ -39,18 +32,27 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       });
     }
 
-    const question = questionService.createQuestion(payload.data);
+    try {
+      const question = questionService.createQuestion(payload.data);
 
-    return reply.code(201).send({
-      message: "질문을 저장했습니다.",
-      data: question,
-    });
+      return reply.code(201).send({
+        message: "질문을 저장했습니다.",
+        data: question,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        message: error instanceof Error ? error.message : "질문을 저장하지 못했습니다.",
+      });
+    }
   });
 
   app.patch<{ Params: { id: string } }>("/admin/questions/:id", async (request, reply) => {
-    const payload = adminQuestionSchema.partial().extend({
-      isPublished: z.boolean().optional(),
-    }).safeParse(request.body);
+    const payload = adminQuestionSchema
+      .partial()
+      .extend({
+        isPublished: z.boolean().optional(),
+      })
+      .safeParse(request.body);
 
     if (!payload.success) {
       return reply.code(400).send({
@@ -59,16 +61,22 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       });
     }
 
-    const question = questionService.updateQuestion(Number(request.params.id), payload.data);
-    if (!question) {
-      return reply.code(404).send({
-        message: "수정할 질문을 찾을 수 없습니다.",
+    try {
+      const question = questionService.updateQuestion(Number(request.params.id), payload.data);
+      if (!question) {
+        return reply.code(404).send({
+          message: "수정할 질문을 찾을 수 없습니다.",
+        });
+      }
+
+      return {
+        message: "질문을 수정했습니다.",
+        data: question,
+      };
+    } catch (error) {
+      return reply.code(400).send({
+        message: error instanceof Error ? error.message : "질문을 수정하지 못했습니다.",
       });
     }
-
-    return {
-      message: "질문을 수정했습니다.",
-      data: question,
-    };
   });
 }
