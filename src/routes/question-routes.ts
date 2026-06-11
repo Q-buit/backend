@@ -24,7 +24,7 @@ export async function registerQuestionRoutes(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>("/questions/:id", async (request, reply) => {
-    const question = questionService.getQuestionById(Number(request.params.id));
+    const question = await questionService.getQuestionById(Number(request.params.id));
 
     if (!question) {
       return reply.code(404).send({
@@ -45,7 +45,7 @@ export async function registerQuestionRoutes(app: FastifyInstance) {
       });
     }
 
-    const question = questionService.getQuestionDetail(parsedTrack.data, questionOrder);
+    const question = await questionService.getQuestionDetail(parsedTrack.data, questionOrder);
     if (!question) {
       return reply.code(404).send({
         message: "질문을 찾을 수 없습니다.",

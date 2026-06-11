@@ -36,11 +36,12 @@ export class QuestionService {
     return this.questionRepository.findAll();
   }
 
-  createQuestion(input: CreateQuestionInput) {
-    const existingQuestions = this.questionRepository.findAllByTrack(input.track);
-    const existingPublishedQuestions = this.questionRepository.findAll();
-    const nextId = this.questionRepository.findAll().reduce((max, question) => Math.max(max, question.id), 0) + 1;
-    const nextQuestionOrder = existingQuestions.reduce((max, question) => Math.max(max, question.questionOrder), 0) + 1;
+  async createQuestion(input: CreateQuestionInput) {
+    const [existingPublishedQuestionIds, nextId, nextQuestionOrder] = await Promise.all([
+      this.questionRepository.existsByIds(input.followUpQuestionIds),
+      this.questionRepository.getNextQuestionId(),
+      this.questionRepository.getNextQuestionOrder(input.track),
+    ]);
     const normalizedFollowUpQuestionIds = [...new Set(input.followUpQuestionIds)];
 
     if (normalizedFollowUpQuestionIds.includes(nextId)) {
@@ -48,7 +49,7 @@ export class QuestionService {
     }
 
     const missingFollowUpQuestionId = normalizedFollowUpQuestionIds.find(
-      (followUpQuestionId) => !existingPublishedQuestions.some((question) => question.id === followUpQuestionId),
+      (followUpQuestionId) => !existingPublishedQuestionIds.includes(followUpQuestionId),
     );
     if (missingFollowUpQuestionId) {
       throw new Error(`존재하지 않는 꼬리질문 ID가 있습니다: ${missingFollowUpQuestionId}`);
@@ -71,15 +72,15 @@ export class QuestionService {
     return this.questionRepository.create(question, normalizedFollowUpQuestionIds);
   }
 
-  updateQuestion(id: number, input: UpdateQuestionInput) {
+  async updateQuestion(id: number, input: UpdateQuestionInput) {
     if (input.followUpQuestionIds?.includes(id)) {
       throw new Error("질문은 자기 자신을 꼬리질문으로 가질 수 없습니다.");
     }
 
     if (input.followUpQuestionIds) {
-      const existingPublishedQuestions = this.questionRepository.findAll();
+      const existingPublishedQuestionIds = await this.questionRepository.existsByIds(input.followUpQuestionIds);
       const missingFollowUpQuestionId = input.followUpQuestionIds.find(
-        (followUpQuestionId) => !existingPublishedQuestions.some((question) => question.id === followUpQuestionId),
+        (followUpQuestionId) => !existingPublishedQuestionIds.includes(followUpQuestionId),
       );
       if (missingFollowUpQuestionId) {
         throw new Error(`존재하지 않는 꼬리질문 ID가 있습니다: ${missingFollowUpQuestionId}`);

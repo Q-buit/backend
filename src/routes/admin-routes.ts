@@ -33,7 +33,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     }
 
     try {
-      const question = questionService.createQuestion(payload.data);
+      const question = await questionService.createQuestion(payload.data);
 
       return reply.code(201).send({
         message: "질문을 저장했습니다.",
@@ -62,7 +62,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     }
 
     try {
-      const question = questionService.updateQuestion(Number(request.params.id), payload.data);
+      const question = await questionService.updateQuestion(Number(request.params.id), payload.data);
       if (!question) {
         return reply.code(404).send({
           message: "수정할 질문을 찾을 수 없습니다.",
