@@ -1,131 +1,273 @@
-import type { Subscriber, SubscriberTrack, SubscriptionToken, SubscriptionStatus, TokenType } from "../domain/subscription.js";
+import type {
+  SubscriptionStatus as PrismaSubscriptionStatus,
+  TokenType as PrismaTokenType,
+  Track as PrismaTrack,
+} from "@prisma/client";
+import type {
+  Subscriber,
+  SubscriberTrack,
+  SubscriptionStatus,
+  SubscriptionToken,
+  TokenType,
+} from "../domain/subscription.js";
 import type { Track } from "../domain/question.js";
-
-const subscribers: Subscriber[] = [];
-const subscriberTracks: SubscriberTrack[] = [];
-const subscriptionTokens: SubscriptionToken[] = [];
+import { prisma } from "../lib/prisma.js";
 
 export class SubscriptionRepository {
-  findSubscriberByEmail(email: string) {
-    return subscribers.find((subscriber) => subscriber.email === email) ?? null;
+  async findSubscriberByEmail(email: string): Promise<Subscriber | null> {
+    const subscriber = await prisma.subscriber.findUnique({
+      where: { email },
+    });
+
+    return subscriber ? this.toSubscriber(subscriber) : null;
   }
 
-  findSubscriberById(id: number) {
-    return subscribers.find((subscriber) => subscriber.id === id) ?? null;
+  async findSubscriberById(id: number): Promise<Subscriber | null> {
+    const subscriber = await prisma.subscriber.findUnique({
+      where: { id },
+    });
+
+    return subscriber ? this.toSubscriber(subscriber) : null;
   }
 
-  createSubscriber(input: Pick<Subscriber, "email" | "status" | "consentToReceive">) {
-    const timestamp = new Date().toISOString();
-    const subscriber: Subscriber = {
-      id: subscribers.reduce((max, item) => Math.max(max, item.id), 0) + 1,
-      email: input.email,
-      status: input.status,
-      consentToReceive: input.consentToReceive,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
+  async createSubscriber(input: Pick<Subscriber, "email" | "status" | "consentToReceive">): Promise<Subscriber> {
+    const subscriber = await prisma.subscriber.create({
+      data: {
+        email: input.email,
+        status: input.status as PrismaSubscriptionStatus,
+        consentToReceive: input.consentToReceive,
+      },
+    });
 
-    subscribers.push(subscriber);
-    return subscriber;
+    return this.toSubscriber(subscriber);
   }
 
-  updateSubscriber(id: number, update: Partial<Pick<Subscriber, "status" | "consentToReceive">>) {
-    const subscriber = this.findSubscriberById(id);
-    if (!subscriber) {
+  async updateSubscriber(
+    id: number,
+    update: Partial<Pick<Subscriber, "status" | "consentToReceive">>,
+  ): Promise<Subscriber | null> {
+    const existing = await prisma.subscriber.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) {
       return null;
     }
 
-    Object.assign(subscriber, update, {
-      updatedAt: new Date().toISOString(),
+    const subscriber = await prisma.subscriber.update({
+      where: { id },
+      data: {
+        ...(update.status ? { status: update.status as PrismaSubscriptionStatus } : {}),
+        ...(update.consentToReceive !== undefined
+          ? { consentToReceive: update.consentToReceive }
+          : {}),
+      },
     });
 
-    return subscriber;
+    return this.toSubscriber(subscriber);
   }
 
-  findTracksBySubscriberId(subscriberId: number) {
-    return subscriberTracks.filter((track) => track.subscriberId === subscriberId);
+  async findTracksBySubscriberId(subscriberId: number): Promise<SubscriberTrack[]> {
+    const tracks = await prisma.subscriberTrack.findMany({
+      where: { subscriberId },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return tracks.map((track) => this.toSubscriberTrack(track));
   }
 
-  upsertTrack(subscriberId: number, track: Track, status: SubscriptionStatus) {
-    const existingTrack = subscriberTracks.find((item) => item.subscriberId === subscriberId && item.track === track);
-    const timestamp = new Date().toISOString();
+  async upsertTrack(
+    subscriberId: number,
+    track: Track,
+    status: SubscriptionStatus,
+  ): Promise<SubscriberTrack> {
+    const now = new Date();
+    const existingTrack = await prisma.subscriberTrack.findUnique({
+      where: {
+        subscriberId_track: {
+          subscriberId,
+          track: track as PrismaTrack,
+        },
+      },
+    });
 
     if (existingTrack) {
-      existingTrack.status = status;
-      existingTrack.updatedAt = timestamp;
-      if (status === "active" && !existingTrack.activatedAt) {
-        existingTrack.activatedAt = timestamp;
-      }
-      if (status === "unsubscribed") {
-        existingTrack.unsubscribedAt = timestamp;
-      }
-      return existingTrack;
+      const subscriberTrack = await prisma.subscriberTrack.update({
+        where: {
+          subscriberId_track: {
+            subscriberId,
+            track: track as PrismaTrack,
+          },
+        },
+        data: {
+          status: status as PrismaSubscriptionStatus,
+          ...(status === "active" && !existingTrack.activatedAt ? { activatedAt: now } : {}),
+          ...(status === "dormant" ? { dormantAt: now } : {}),
+          ...(status === "unsubscribed" ? { unsubscribedAt: now } : {}),
+        },
+      });
+
+      return this.toSubscriberTrack(subscriberTrack);
     }
 
-    const subscriberTrack: SubscriberTrack = {
-      id: subscriberTracks.reduce((max, item) => Math.max(max, item.id), 0) + 1,
-      subscriberId,
-      track,
-      status,
-      currentQuestionOrder: 1,
-      lastClickedAt: null,
-      activatedAt: status === "active" ? timestamp : null,
-      dormantAt: null,
-      unsubscribedAt: status === "unsubscribed" ? timestamp : null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
+    const subscriberTrack = await prisma.subscriberTrack.upsert({
+      where: {
+        subscriberId_track: {
+          subscriberId,
+          track: track as PrismaTrack,
+        },
+      },
+      update: {},
+      create: {
+        subscriberId,
+        track: track as PrismaTrack,
+        status: status as PrismaSubscriptionStatus,
+        currentQuestionOrder: 1,
+        activatedAt: status === "active" ? now : null,
+        dormantAt: status === "dormant" ? now : null,
+        unsubscribedAt: status === "unsubscribed" ? now : null,
+      },
+    });
 
-    subscriberTracks.push(subscriberTrack);
-    return subscriberTrack;
+    return this.toSubscriberTrack(subscriberTrack);
   }
 
-  updateAllTracksStatus(subscriberId: number, status: SubscriptionStatus) {
-    const timestamp = new Date().toISOString();
+  async updateAllTracksStatus(subscriberId: number, status: SubscriptionStatus): Promise<void> {
+    const now = new Date();
+    const tracks = await prisma.subscriberTrack.findMany({
+      where: { subscriberId },
+    });
 
-    for (const track of subscriberTracks.filter((item) => item.subscriberId === subscriberId)) {
-      track.status = status;
-      track.updatedAt = timestamp;
-      if (status === "active" && !track.activatedAt) {
-        track.activatedAt = timestamp;
-      }
-      if (status === "unsubscribed") {
-        track.unsubscribedAt = timestamp;
-      }
-    }
-  }
-
-  createToken(subscriberId: number, type: TokenType, token: string, expiresAt: string) {
-    const subscriptionToken: SubscriptionToken = {
-      id: subscriptionTokens.reduce((max, item) => Math.max(max, item.id), 0) + 1,
-      subscriberId,
-      type,
-      token,
-      expiresAt,
-      usedAt: null,
-      createdAt: new Date().toISOString(),
-    };
-
-    subscriptionTokens.push(subscriptionToken);
-    return subscriptionToken;
-  }
-
-  findValidToken(token: string, type: TokenType) {
-    const now = Date.now();
-    return (
-      subscriptionTokens.find((item) => {
-        return item.token === token && item.type === type && item.usedAt === null && new Date(item.expiresAt).getTime() > now;
-      }) ?? null
+    await prisma.$transaction(
+      tracks.map((track) =>
+        prisma.subscriberTrack.update({
+          where: { id: track.id },
+          data: {
+            status: status as PrismaSubscriptionStatus,
+            ...(status === "active" && !track.activatedAt ? { activatedAt: now } : {}),
+            ...(status === "dormant" ? { dormantAt: now } : {}),
+            ...(status === "unsubscribed" ? { unsubscribedAt: now } : {}),
+          },
+        }),
+      ),
     );
   }
 
-  markTokenUsed(id: number) {
-    const token = subscriptionTokens.find((item) => item.id === id);
-    if (!token) {
+  async createToken(
+    subscriberId: number,
+    type: TokenType,
+    tokenHash: string,
+    expiresAt: string,
+  ): Promise<SubscriptionToken> {
+    const token = await prisma.subscriptionToken.create({
+      data: {
+        subscriberId,
+        type: type as PrismaTokenType,
+        tokenHash,
+        expiresAt: new Date(expiresAt),
+      },
+    });
+
+    return this.toSubscriptionToken(token);
+  }
+
+  async findValidToken(tokenHash: string, type: TokenType): Promise<SubscriptionToken | null> {
+    const token = await prisma.subscriptionToken.findFirst({
+      where: {
+        tokenHash,
+        type: type as PrismaTokenType,
+        usedAt: null,
+        expiresAt: {
+          gt: new Date(),
+        },
+      },
+    });
+
+    return token ? this.toSubscriptionToken(token) : null;
+  }
+
+  async markTokenUsed(id: number): Promise<SubscriptionToken | null> {
+    const existing = await prisma.subscriptionToken.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!existing) {
       return null;
     }
 
-    token.usedAt = new Date().toISOString();
-    return token;
+    const token = await prisma.subscriptionToken.update({
+      where: { id },
+      data: {
+        usedAt: new Date(),
+      },
+    });
+
+    return this.toSubscriptionToken(token);
+  }
+
+  private toSubscriber(subscriber: {
+    id: number;
+    email: string;
+    status: PrismaSubscriptionStatus;
+    consentToReceive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  }): Subscriber {
+    return {
+      id: subscriber.id,
+      email: subscriber.email,
+      status: subscriber.status as SubscriptionStatus,
+      consentToReceive: subscriber.consentToReceive,
+      createdAt: subscriber.createdAt.toISOString(),
+      updatedAt: subscriber.updatedAt.toISOString(),
+    };
+  }
+
+  private toSubscriberTrack(track: {
+    id: number;
+    subscriberId: number;
+    track: PrismaTrack;
+    status: PrismaSubscriptionStatus;
+    currentQuestionOrder: number;
+    lastClickedAt: Date | null;
+    activatedAt: Date | null;
+    dormantAt: Date | null;
+    unsubscribedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): SubscriberTrack {
+    return {
+      id: track.id,
+      subscriberId: track.subscriberId,
+      track: track.track as Track,
+      status: track.status as SubscriptionStatus,
+      currentQuestionOrder: track.currentQuestionOrder,
+      lastClickedAt: track.lastClickedAt?.toISOString() ?? null,
+      activatedAt: track.activatedAt?.toISOString() ?? null,
+      dormantAt: track.dormantAt?.toISOString() ?? null,
+      unsubscribedAt: track.unsubscribedAt?.toISOString() ?? null,
+      createdAt: track.createdAt.toISOString(),
+      updatedAt: track.updatedAt.toISOString(),
+    };
+  }
+
+  private toSubscriptionToken(token: {
+    id: number;
+    subscriberId: number;
+    type: PrismaTokenType;
+    tokenHash: string;
+    expiresAt: Date;
+    usedAt: Date | null;
+    createdAt: Date;
+  }): SubscriptionToken {
+    return {
+      id: token.id,
+      subscriberId: token.subscriberId,
+      type: token.type as TokenType,
+      token: token.tokenHash,
+      expiresAt: token.expiresAt.toISOString(),
+      usedAt: token.usedAt?.toISOString() ?? null,
+      createdAt: token.createdAt.toISOString(),
+    };
   }
 }

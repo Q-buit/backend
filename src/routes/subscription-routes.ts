@@ -22,7 +22,7 @@ export async function registerSubscriptionRoutes(app: FastifyInstance) {
       });
     }
 
-    const result = subscriptionService.createSubscription(payload.data);
+    const result = await subscriptionService.createSubscription(payload.data);
 
     return reply.code(201).send({
       message: "구독 요청을 저장했습니다. 인증 링크를 확인해 주세요.",
@@ -42,7 +42,7 @@ export async function registerSubscriptionRoutes(app: FastifyInstance) {
       });
     }
 
-    const result = subscriptionService.verifySubscription(payload.data.token);
+    const result = await subscriptionService.verifySubscription(payload.data.token);
     if (!result) {
       return reply.code(404).send({
         message: "유효한 인증 토큰을 찾을 수 없습니다.",
@@ -67,7 +67,7 @@ export async function registerSubscriptionRoutes(app: FastifyInstance) {
       });
     }
 
-    const result = subscriptionService.unsubscribe(payload.data.token);
+    const result = await subscriptionService.unsubscribe(payload.data.token);
     if (!result) {
       return reply.code(404).send({
         message: "유효한 구독 취소 토큰을 찾을 수 없습니다.",
@@ -92,7 +92,7 @@ export async function registerSubscriptionRoutes(app: FastifyInstance) {
       });
     }
 
-    const result = subscriptionService.getManageData(payload.data.token);
+    const result = await subscriptionService.getManageData(payload.data.token);
     if (!result) {
       return reply.code(404).send({
         message: "유효한 관리 토큰을 찾을 수 없습니다.",

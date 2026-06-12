@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import type { Track } from "../domain/question.js";
 import { SubscriptionRepository } from "../repositories/subscription-repository.js";
 
@@ -15,115 +15,129 @@ const UNSUBSCRIBE_TOKEN_TTL_DAYS = 30;
 export class SubscriptionService {
   constructor(private readonly subscriptionRepository: SubscriptionRepository) {}
 
-  createSubscription(input: CreateSubscriptionInput) {
-    const existingSubscriber = this.subscriptionRepository.findSubscriberByEmail(input.email);
+  async createSubscription(input: CreateSubscriptionInput) {
+    const existingSubscriber = await this.subscriptionRepository.findSubscriberByEmail(input.email);
     const subscriber =
       existingSubscriber ??
-      this.subscriptionRepository.createSubscriber({
+      (await this.subscriptionRepository.createSubscriber({
         email: input.email,
         status: "pending",
         consentToReceive: input.consentToReceive,
-      });
+      }));
 
     if (existingSubscriber) {
-      this.subscriptionRepository.updateSubscriber(existingSubscriber.id, {
+      await this.subscriptionRepository.updateSubscriber(existingSubscriber.id, {
         status: "pending",
         consentToReceive: input.consentToReceive,
       });
     }
 
     for (const track of input.tracks) {
-      this.subscriptionRepository.upsertTrack(subscriber.id, track, "pending");
+      await this.subscriptionRepository.upsertTrack(subscriber.id, track, "pending");
     }
 
-    const verifyToken = this.subscriptionRepository.createToken(
+    const rawVerifyToken = this.generateToken();
+    await this.subscriptionRepository.createToken(
       subscriber.id,
       "verify",
-      this.generateToken(),
+      this.hashToken(rawVerifyToken),
       this.createExpiresAtHours(VERIFY_TOKEN_TTL_HOURS),
     );
 
     return {
       subscriber,
-      verifyToken: verifyToken.token,
-      verifyUrl: `/subscriptions/verify?token=${verifyToken.token}`,
+      verifyToken: rawVerifyToken,
+      verifyUrl: `/subscriptions/verify?token=${rawVerifyToken}`,
     };
   }
 
-  verifySubscription(token: string) {
-    const verifyToken = this.subscriptionRepository.findValidToken(token, "verify");
+  async verifySubscription(token: string) {
+    const verifyToken = await this.subscriptionRepository.findValidToken(this.hashToken(token), "verify");
     if (!verifyToken) {
       return null;
     }
 
-    this.subscriptionRepository.markTokenUsed(verifyToken.id);
-    const subscriber = this.subscriptionRepository.updateSubscriber(verifyToken.subscriberId, { status: "active" });
+    await this.subscriptionRepository.markTokenUsed(verifyToken.id);
+    const subscriber = await this.subscriptionRepository.updateSubscriber(verifyToken.subscriberId, {
+      status: "active",
+    });
     if (!subscriber) {
       return null;
     }
 
-    this.subscriptionRepository.updateAllTracksStatus(subscriber.id, "active");
+    await this.subscriptionRepository.updateAllTracksStatus(subscriber.id, "active");
 
-    const manageToken = this.subscriptionRepository.createToken(
+    const rawManageToken = this.generateToken();
+    await this.subscriptionRepository.createToken(
       subscriber.id,
       "manage",
-      this.generateToken(),
+      this.hashToken(rawManageToken),
       this.createExpiresAtDays(MANAGE_TOKEN_TTL_DAYS),
     );
-    const unsubscribeToken = this.subscriptionRepository.createToken(
+    const rawUnsubscribeToken = this.generateToken();
+    await this.subscriptionRepository.createToken(
       subscriber.id,
       "unsubscribe",
-      this.generateToken(),
+      this.hashToken(rawUnsubscribeToken),
       this.createExpiresAtDays(UNSUBSCRIBE_TOKEN_TTL_DAYS),
     );
 
     return {
       subscriber,
-      tracks: this.subscriptionRepository.findTracksBySubscriberId(subscriber.id),
-      manageToken: manageToken.token,
-      unsubscribeToken: unsubscribeToken.token,
+      tracks: await this.subscriptionRepository.findTracksBySubscriberId(subscriber.id),
+      manageToken: rawManageToken,
+      unsubscribeToken: rawUnsubscribeToken,
     };
   }
 
-  getManageData(token: string) {
-    const manageToken = this.subscriptionRepository.findValidToken(token, "manage");
+  async getManageData(token: string) {
+    const manageToken = await this.subscriptionRepository.findValidToken(this.hashToken(token), "manage");
     if (!manageToken) {
       return null;
     }
 
-    const subscriber = this.subscriptionRepository.findSubscriberById(manageToken.subscriberId);
+    const subscriber = await this.subscriptionRepository.findSubscriberById(manageToken.subscriberId);
     if (!subscriber) {
       return null;
     }
 
     return {
       subscriber,
-      tracks: this.subscriptionRepository.findTracksBySubscriberId(subscriber.id),
+      tracks: await this.subscriptionRepository.findTracksBySubscriberId(subscriber.id),
     };
   }
 
-  unsubscribe(token: string) {
-    const unsubscribeToken = this.subscriptionRepository.findValidToken(token, "unsubscribe");
+  async unsubscribe(token: string) {
+    const unsubscribeToken = await this.subscriptionRepository.findValidToken(
+      this.hashToken(token),
+      "unsubscribe",
+    );
     if (!unsubscribeToken) {
       return null;
     }
 
-    this.subscriptionRepository.markTokenUsed(unsubscribeToken.id);
-    const subscriber = this.subscriptionRepository.updateSubscriber(unsubscribeToken.subscriberId, { status: "unsubscribed" });
+    await this.subscriptionRepository.markTokenUsed(unsubscribeToken.id);
+    const subscriber = await this.subscriptionRepository.updateSubscriber(unsubscribeToken.subscriberId, {
+      status: "unsubscribed",
+    });
     if (!subscriber) {
       return null;
     }
 
-    this.subscriptionRepository.updateAllTracksStatus(subscriber.id, "unsubscribed");
+    await this.subscriptionRepository.updateAllTracksStatus(subscriber.id, "unsubscribed");
 
     return {
       subscriber,
-      tracks: this.subscriptionRepository.findTracksBySubscriberId(subscriber.id),
+      tracks: await this.subscriptionRepository.findTracksBySubscriberId(subscriber.id),
     };
   }
 
   private generateToken() {
     return randomBytes(24).toString("hex");
+  }
+
+  private hashToken(token: string) {
+    return createHash("sha256").update(token).digest("hex");
   }
 
   private createExpiresAtHours(hours: number) {
