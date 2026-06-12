@@ -42,6 +42,10 @@ export async function registerSubscriptionRoutes(app: FastifyInstance) {
     const payload = tokenSchema.safeParse(request.query);
 
     if (!payload.success) {
+      if (shouldRedirectToWeb(request.headers.accept)) {
+        return reply.redirect(createWebSubscriptionResultUrl("error"));
+      }
+
       return reply.code(400).send({
         message: "인증 토큰 형식이 올바르지 않습니다.",
       });
@@ -49,9 +53,17 @@ export async function registerSubscriptionRoutes(app: FastifyInstance) {
 
     const result = await subscriptionService.verifySubscription(payload.data.token);
     if (!result) {
+      if (shouldRedirectToWeb(request.headers.accept)) {
+        return reply.redirect(createWebSubscriptionResultUrl("error"));
+      }
+
       return reply.code(404).send({
         message: "유효한 인증 토큰을 찾을 수 없습니다.",
       });
+    }
+
+    if (shouldRedirectToWeb(request.headers.accept)) {
+      return reply.redirect(createWebSubscriptionResultUrl("success"));
     }
 
     return {
@@ -109,4 +121,13 @@ export async function registerSubscriptionRoutes(app: FastifyInstance) {
       data: result,
     };
   });
+}
+
+function shouldRedirectToWeb(acceptHeader: string | undefined) {
+  return acceptHeader?.includes("text/html") ?? false;
+}
+
+function createWebSubscriptionResultUrl(status: "success" | "error") {
+  const baseUrl = process.env.PUBLIC_WEB_BASE_URL ?? "http://localhost:3000";
+  return `${baseUrl}/subscriptions/verify?status=${status}`;
 }
