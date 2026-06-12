@@ -220,6 +220,12 @@ MVP에서는 무한 순환 구조를 피하기 위해 깊이 1만 사용한다.
 4. 링크 클릭
 5. `active` 전환
 
+메일 발송:
+- 개발 환경 기본값은 `MAIL_PROVIDER=console`이다.
+- 이 경우 인증 메일 내용과 링크를 서버 로그에 출력한다.
+- Postfix 연동 시 `MAIL_PROVIDER=smtp`로 바꾸고 `SMTP_HOST`, `SMTP_PORT`, `MAIL_FROM`을 설정한다.
+- Oracle VM 내부 Postfix를 쓸 때는 보통 `SMTP_HOST=localhost`, `SMTP_PORT=25`, `SMTP_SECURE=false`로 시작한다.
+
 ## 8. 현재 Prisma 초안과 다른 점
 
 현재 `prisma/schema.prisma` 초안과 비교했을 때, 이후 수정이 필요한 부분:

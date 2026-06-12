@@ -11,19 +11,25 @@ importers:
       '@fastify/cors':
         specifier: 11.0.1
         version: 11.0.1
+      '@prisma/client':
+        specifier: ^6.16.2
+        version: 6.16.2(prisma@6.16.2(typescript@5.8.3))(typescript@5.8.3)
       fastify:
         specifier: 5.3.2
         version: 5.3.2
+      nodemailer:
+        specifier: ^8.0.11
+        version: 8.0.11
       zod:
         specifier: 3.24.4
         version: 3.24.4
     devDependencies:
-      '@prisma/client':
-        specifier: ^6.16.2
-        version: 6.16.2(prisma@6.16.2(typescript@5.8.3))(typescript@5.8.3)
       '@types/node':
         specifier: 22.15.30
         version: 22.15.30
+      '@types/nodemailer':
+        specifier: ^8.0.1
+        version: 8.0.1
       prisma:
         specifier: ^6.16.2
         version: 6.16.2(typescript@5.8.3)
@@ -252,6 +258,9 @@ packages:
   '@types/node@22.15.30':
     resolution: {integrity: sha512-6Q7lr06bEHdlfplU6YRbgG1SFBdlsfNC4/lX+SkhiTs0cpJkOElmWls8PxDFv4yY/xKb8Y6SO0OmSX4wgqTZbA==}
 
+  '@types/nodemailer@8.0.1':
+    resolution: {integrity: sha512-PxpaInm8V1JQDd4j0ds5HfvWQk8JupS1C0Picb96QJsrrRDjBH+DlK7L4ZdNSqNULhiZRQHc40nLVShaGxXAMw==}
+
   abstract-logging@2.0.1:
     resolution: {integrity: sha512-2BjRTZxTPvheOvGbBslFSYOUkr+SjPtOnrLP33f+VIWLzezQpZcqVg7ja3L4dBXmzzgwT+a029jRx5PCi3JuiA==}
 
@@ -398,6 +407,10 @@ packages:
 
   node-fetch-native@1.6.7:
     resolution: {integrity: sha512-g9yhqoedzIUm0nTnTqAQvueMPVOuIY16bqgAJJC8XOOubYFNwz6IER9qs0Gq2Xd0+CecCKFjtdDTMA4u4xG06Q==}
+
+  nodemailer@8.0.11:
+    resolution: {integrity: sha512-nrO/pDAUKl+wXX+lx16tDLbnm0fW6sK/x8mgohaCpg+CdCEl482bD4tCuAZk2DyliruiNTIZxRCoWkDqJEnAiA==}
+    engines: {node: '>=6.0.0'}
 
   nypm@0.6.6:
     resolution: {integrity: sha512-vRyr0r4cbBapw07Xw8xrj9Teq3o7MUD35rSaTcanDbW+aK2XHDgJFiU6ZTj2GBw7Q12ysdsyFss+Vdz4hQ0Y6Q==}
@@ -685,6 +698,10 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
+  '@types/nodemailer@8.0.1':
+    dependencies:
+      '@types/node': 22.15.30
+
   abstract-logging@2.0.1: {}
 
   ajv-formats@3.0.1(ajv@8.20.0):
@@ -870,6 +887,8 @@ snapshots:
       set-cookie-parser: 2.7.2
 
   node-fetch-native@1.6.7: {}
+
+  nodemailer@8.0.11: {}
 
   nypm@0.6.6:
     dependencies:
