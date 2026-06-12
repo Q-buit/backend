@@ -96,11 +96,21 @@ export class SubscriptionService {
       this.createExpiresAtDays(UNSUBSCRIBE_TOKEN_TTL_DAYS),
     );
 
+    const tracks = await this.subscriptionRepository.findTracksBySubscriberId(subscriber.id);
+    if (this.subscriptionMailService) {
+      await this.subscriptionMailService.sendActivationMail({
+        email: subscriber.email,
+        tracks: tracks.map((track) => track.track),
+        manageUrl: this.createManageUrl(rawManageToken),
+      });
+    }
+
     return {
       subscriber,
-      tracks: await this.subscriptionRepository.findTracksBySubscriberId(subscriber.id),
+      tracks,
       manageToken: rawManageToken,
       unsubscribeToken: rawUnsubscribeToken,
+      manageUrl: this.createManageUrl(rawManageToken),
     };
   }
 
@@ -165,5 +175,10 @@ export class SubscriptionService {
   private createVerifyUrl(token: string) {
     const baseUrl = process.env.PUBLIC_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
     return `${baseUrl}/subscriptions/verify?token=${token}`;
+  }
+
+  private createManageUrl(token: string) {
+    const baseUrl = process.env.PUBLIC_WEB_BASE_URL ?? "http://localhost:3000";
+    return `${baseUrl}/manage?token=${token}`;
   }
 }
