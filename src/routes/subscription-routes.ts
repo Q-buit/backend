@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { SubscriptionRepository } from "../repositories/subscription-repository.js";
+import { ConsoleMailSender } from "../services/mail/console-mail-sender.js";
+import { SubscriptionMailService } from "../services/mail/subscription-mail-service.js";
 import { SubscriptionService } from "../services/subscription-service.js";
 
 const createSubscriptionSchema = z.object({
@@ -10,7 +12,10 @@ const createSubscriptionSchema = z.object({
 });
 
 export async function registerSubscriptionRoutes(app: FastifyInstance) {
-  const subscriptionService = new SubscriptionService(new SubscriptionRepository());
+  const subscriptionService = new SubscriptionService(
+    new SubscriptionRepository(),
+    new SubscriptionMailService(new ConsoleMailSender()),
+  );
 
   app.post("/subscriptions", async (request, reply) => {
     const payload = createSubscriptionSchema.safeParse(request.body);

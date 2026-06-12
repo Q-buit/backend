@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Track } from "../domain/question.js";
 import { SubscriptionRepository } from "../repositories/subscription-repository.js";
+import type { SubscriptionMailService } from "./mail/subscription-mail-service.js";
 
 type CreateSubscriptionInput = {
   email: string;
@@ -13,7 +14,10 @@ const MANAGE_TOKEN_TTL_DAYS = 30;
 const UNSUBSCRIBE_TOKEN_TTL_DAYS = 30;
 
 export class SubscriptionService {
-  constructor(private readonly subscriptionRepository: SubscriptionRepository) {}
+  constructor(
+    private readonly subscriptionRepository: SubscriptionRepository,
+    private readonly subscriptionMailService?: SubscriptionMailService,
+  ) {}
 
   async createSubscription(input: CreateSubscriptionInput) {
     const existingSubscriber = await this.subscriptionRepository.findSubscriberByEmail(input.email);
@@ -44,10 +48,20 @@ export class SubscriptionService {
       this.createExpiresAtHours(VERIFY_TOKEN_TTL_HOURS),
     );
 
+    const verifyUrl = this.createVerifyUrl(rawVerifyToken);
+
+    if (this.subscriptionMailService) {
+      await this.subscriptionMailService.sendVerifyMail({
+        email: subscriber.email,
+        tracks: input.tracks,
+        verifyUrl,
+      });
+    }
+
     return {
       subscriber,
       verifyToken: rawVerifyToken,
-      verifyUrl: `/subscriptions/verify?token=${rawVerifyToken}`,
+      verifyUrl,
     };
   }
 
@@ -146,5 +160,10 @@ export class SubscriptionService {
 
   private createExpiresAtDays(days: number) {
     return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  private createVerifyUrl(token: string) {
+    const baseUrl = process.env.PUBLIC_API_BASE_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+    return `${baseUrl}/subscriptions/verify?token=${token}`;
   }
 }
